@@ -17,7 +17,7 @@ An AI-powered encyclopedia application that generates encyclopedia-style definit
 
 ## 🚀 Live Demo
 
-View your app in AI Studio: [https://ai.studio/apps/bundled/infinite_wiki](https://infinite-wikip.netlify.app/)
+View your app in AI Studio: [INFINITE_WIKI](https://infinite-wikip.netlify.app/)
 
 ## 🛠️ Tech Stack
 
