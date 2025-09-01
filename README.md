@@ -36,7 +36,7 @@ View my app live : [INFINITE_WIKI](https://infinite-wikip.netlify.app/)
 
 ### 1. Clone the Repository
 ```bash
-git clone <your-repo-url>
+git clone https://github.com/harsh-kakadiya1/INFINITE-WIKI.git
 cd infinite-wiki
 ```
 
