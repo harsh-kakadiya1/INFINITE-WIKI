@@ -2,7 +2,7 @@
 <img width="1200" height="480" alt="GHBanner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
 </div>
 
-# 🌟 Infinite Wiki
+# 🌟 [Infinite Wiki](https://infinite-wikip.netlify.app/)
 
 An AI-powered encyclopedia application that generates encyclopedia-style definitions and ASCII art visualizations for any topic using Google's Gemini 2.5 Flash API.
 
