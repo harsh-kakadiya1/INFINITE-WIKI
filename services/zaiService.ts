@@ -18,9 +18,42 @@ const textModelName = 'glm-5';
 // Development mode flag - set to true to use mock data instead of API
 const USE_MOCK_DATA = import.meta.env.DEV;
 
-// Rate limiting: simple delay between requests
+// Rate limiting: global request queue to prevent concurrent requests
 let lastRequestTime = 0;
-const MIN_REQUEST_INTERVAL = 2000; // 2 seconds between requests to prevent rate limiting
+const MIN_REQUEST_INTERVAL = 5000; // 5 seconds between requests to prevent rate limiting
+let isRequestInProgress = false;
+const requestQueue: Array<() => Promise<any>> = [];
+
+async function processQueue() {
+  if (isRequestInProgress || requestQueue.length === 0) {
+    return;
+  }
+  
+  isRequestInProgress = true;
+  const request = requestQueue.shift();
+  
+  try {
+    await request?.();
+  } finally {
+    isRequestInProgress = false;
+    // Process next request after a delay
+    setTimeout(() => processQueue(), 1000);
+  }
+}
+
+async function queueRequest<T>(requestFn: () => Promise<T>): Promise<T> {
+  return new Promise((resolve, reject) => {
+    requestQueue.push(async () => {
+      try {
+        const result = await requestFn();
+        resolve(result);
+      } catch (error) {
+        reject(error);
+      }
+    });
+    processQueue();
+  });
+}
 
 async function rateLimitDelay() {
   const now = Date.now();
@@ -98,44 +131,49 @@ export async function* streamDefinition(
     return;
   }
 
-  await rateLimitDelay();
-
   const prompt = `Provide a concise, single-paragraph encyclopedia-style definition for the term: "${topic}". Be informative and neutral. Do not use markdown, titles, or any special formatting. Respond with only the text of the definition itself.`;
 
   const maxRetries = 3;
-  const baseDelay = 2000; // Start with 2 second delay for rate limits
+  const baseDelay = 10000; // Start with 10 second delay for rate limits
   
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
-      const response = await fetch(`${API_BASE}/chat/completions`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${API_KEY}`,
-        },
-        body: JSON.stringify({
-          model: textModelName,
-          messages: [
-            {
-              role: 'user',
-              content: prompt
-            }
-          ],
-          stream: true
-        })
+      // Use the request queue to prevent concurrent requests
+      const response = await queueRequest(async () => {
+        await rateLimitDelay();
+        
+        const response = await fetch(`${API_BASE}/chat/completions`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${API_KEY}`,
+          },
+          body: JSON.stringify({
+            model: textModelName,
+            messages: [
+              {
+                role: 'user',
+                content: prompt
+              }
+            ],
+            stream: true
+          })
+        });
+
+        if (response.status === 429) {
+          // Rate limit hit - wait longer before retry
+          const delay = baseDelay * attempt; // Exponential backoff
+          console.warn(`Rate limit hit in streamDefinition, waiting ${delay}ms before retry ${attempt}/${maxRetries}`);
+          await new Promise(resolve => setTimeout(resolve, delay));
+          throw new Error(`HTTP error! status: 429`);
+        }
+
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+
+        return response;
       });
-
-      if (response.status === 429) {
-        // Rate limit hit - wait longer before retry
-        const delay = baseDelay * attempt; // Exponential backoff
-        console.warn(`Rate limit hit in streamDefinition, waiting ${delay}ms before retry ${attempt}/${maxRetries}`);
-        await new Promise(resolve => setTimeout(resolve, delay));
-        continue;
-      }
-
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
 
       const reader = response.body?.getReader();
       const decoder = new TextDecoder();
@@ -181,7 +219,7 @@ export async function* streamDefinition(
       
       // For non-429 errors, wait a bit before retrying
       if (!errorMessage.includes('429')) {
-        await new Promise(resolve => setTimeout(resolve, 1000 * attempt));
+        await new Promise(resolve => setTimeout(resolve, 5000 * attempt));
       }
     }
   }
@@ -201,45 +239,49 @@ export async function getRandomWord(): Promise<string> {
     throw new Error('VITE_ZAI_API_KEY is not configured.');
   }
 
-  await rateLimitDelay();
-
   const prompt = `Generate a single, random, interesting English word or a two-word concept. It can be a noun, verb, adjective, or a proper noun. Respond with only the word or concept itself, with no extra text, punctuation, or formatting.`;
 
   const maxRetries = 3;
-  const baseDelay = 2000; // Start with 2 second delay for rate limits
+  const baseDelay = 10000; // Start with 10 second delay for rate limits
   
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
-      const response = await fetch(`${API_BASE}/chat/completions`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${API_KEY}`,
-        },
-        body: JSON.stringify({
-          model: textModelName,
-          messages: [
-            {
-              role: 'user',
-              content: prompt
-            }
-          ]
-        })
+      // Use the request queue to prevent concurrent requests
+      const data = await queueRequest(async () => {
+        await rateLimitDelay();
+
+        const response = await fetch(`${API_BASE}/chat/completions`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${API_KEY}`,
+          },
+          body: JSON.stringify({
+            model: textModelName,
+            messages: [
+              {
+                role: 'user',
+                content: prompt
+              }
+            ]
+          })
+        });
+
+        if (response.status === 429) {
+          // Rate limit hit - wait longer before retry
+          const delay = baseDelay * attempt; // Exponential backoff
+          console.warn(`Rate limit hit in getRandomWord, waiting ${delay}ms before retry ${attempt}/${maxRetries}`);
+          await new Promise(resolve => setTimeout(resolve, delay));
+          throw new Error(`HTTP error! status: 429`);
+        }
+
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+
+        return await response.json();
       });
 
-      if (response.status === 429) {
-        // Rate limit hit - wait longer before retry
-        const delay = baseDelay * attempt; // Exponential backoff
-        console.warn(`Rate limit hit in getRandomWord, waiting ${delay}ms before retry ${attempt}/${maxRetries}`);
-        await new Promise(resolve => setTimeout(resolve, delay));
-        continue;
-      }
-
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-
-      const data = await response.json();
       return data.choices[0].message.content.trim();
 
     } catch (error) {
@@ -253,7 +295,7 @@ export async function getRandomWord(): Promise<string> {
       
       // For non-429 errors, wait a bit before retrying
       if (!errorMessage.includes('429')) {
-        await new Promise(resolve => setTimeout(resolve, 1000 * attempt));
+        await new Promise(resolve => setTimeout(resolve, 5000 * attempt));
       }
     }
   }
@@ -283,42 +325,46 @@ export async function generateAsciiArt(topic: string): Promise<AsciiArtData> {
 - Respond with only the ASCII art, no other text or formatting.`;
 
   const maxRetries = 3;
-  const baseDelay = 2000; // Start with 2 second delay for rate limits
+  const baseDelay = 10000; // Start with 10 second delay for rate limits
   
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
-      await rateLimitDelay();
+      // Use the request queue to prevent concurrent requests
+      const data = await queueRequest(async () => {
+        await rateLimitDelay();
 
-      const response = await fetch(`${API_BASE}/chat/completions`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${API_KEY}`,
-        },
-        body: JSON.stringify({
-          model: artModelName,
-          messages: [
-            {
-              role: 'user',
-              content: prompt
-            }
-          ]
-        })
+        const response = await fetch(`${API_BASE}/chat/completions`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${API_KEY}`,
+          },
+          body: JSON.stringify({
+            model: artModelName,
+            messages: [
+              {
+                role: 'user',
+                content: prompt
+              }
+            ]
+          })
+        });
+
+        if (response.status === 429) {
+          // Rate limit hit - wait longer before retry
+          const delay = baseDelay * attempt; // Exponential backoff
+          console.warn(`Rate limit hit in generateAsciiArt, waiting ${delay}ms before retry ${attempt}/${maxRetries}`);
+          await new Promise(resolve => setTimeout(resolve, delay));
+          throw new Error(`HTTP error! status: 429`);
+        }
+
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+
+        return await response.json();
       });
 
-      if (response.status === 429) {
-        // Rate limit hit - wait longer before retry
-        const delay = baseDelay * attempt; // Exponential backoff
-        console.warn(`Rate limit hit, waiting ${delay}ms before retry ${attempt}/${maxRetries}`);
-        await new Promise(resolve => setTimeout(resolve, delay));
-        continue;
-      }
-
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-
-      const data = await response.json();
       const artText = data.choices[0].message.content.trim();
 
       console.log(`Attempt ${attempt}/${maxRetries} - Raw API response:`, artText);
@@ -332,7 +378,7 @@ export async function generateAsciiArt(topic: string): Promise<AsciiArtData> {
 
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
-      console.warn(`Attempt ${attempt}/${maxRetries} failed:`, errorMessage);
+      console.warn(`Attempt ${attempt}/${maxRetries} failed in generateAsciiArt:`, errorMessage);
 
       if (attempt === maxRetries) {
         console.error('All retry attempts failed for ASCII art generation');
@@ -341,7 +387,7 @@ export async function generateAsciiArt(topic: string): Promise<AsciiArtData> {
       
       // For non-429 errors, wait a bit before retrying
       if (!errorMessage.includes('429')) {
-        await new Promise(resolve => setTimeout(resolve, 1000 * attempt));
+        await new Promise(resolve => setTimeout(resolve, 5000 * attempt));
       }
     }
   }
