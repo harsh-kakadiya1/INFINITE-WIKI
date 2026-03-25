@@ -4,7 +4,7 @@
 
 # 🌟 [Infinite Wiki](https://infinite-wikip.netlify.app/)
 
-An AI-powered encyclopedia application that generates encyclopedia-style definitions and ASCII art visualizations for any topic using Google's Gemini 2.5 Flash API.
+An AI-powered encyclopedia application that generates encyclopedia-style definitions and ASCII art visualizations for any topic using Z.ai's GLM models.
 
 ## ✨ Features
 
@@ -23,14 +23,14 @@ View my app live : [INFINITE_WIKI](https://infinite-wikip.netlify.app/)
 
 - **Frontend**: React 19 + TypeScript
 - **Build Tool**: Vite 6
-- **AI API**: Google Gemini 2.5 Flash
+- **AI API**: Z.ai GLM-4-Flash
 - **Styling**: CSS with modern design
 - **Package Manager**: npm
 
 ## 📋 Prerequisites
 
 - **Node.js** (version 18 or higher)
-- **Google Gemini API Key** (Get one from [Google AI Studio](https://makersuite.google.com/app/apikey))
+- **Z.ai API Key** (Get one from [Z.ai API Keys](https://z.ai/manage-apikey/apikey-list))
 
 ## 🚀 Quick Start
 
@@ -49,10 +49,10 @@ npm install
 
 Create a `.env.local` file in the root directory:
 ```bash
-GEMINI_API_KEY=your_gemini_api_key_here
+ZAI_API_KEY=your_zai_api_key_here
 ```
 
-**Important**: Replace `your_gemini_api_key_here` with your actual Gemini API key.
+**Important**: Replace `your_zai_api_key_here` with your actual Z.ai API key.
 
 ### 4. Run the Application
 ```bash
@@ -93,13 +93,13 @@ infinite-wiki/
 - `npm run build` - Build for production
 - `npm run preview` - Preview production build
 
-## 🔒 Security Notes
+## Security Notes
 
 - **Never commit your API key** - The `.env.local` file is already in `.gitignore`
 - **Keep your API key private** - Don't share it publicly
-- **Monitor usage** - Google Gemini API has usage limits and costs
+- **Z.ai API** - The Z.ai API has usage limits and costs
 
-## 🎨 Features in Detail
+## Features in Detail
 
 ### Encyclopedia Definitions
 - Concise, single-paragraph explanations
@@ -130,7 +130,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## 🙏 Acknowledgments
 
-- **Google Gemini API** for providing the AI capabilities
+- **Z.ai API** for providing the AI capabilities
 - **React Team** for the amazing framework
 - **Vite Team** for the fast build tool
 - **Harsh Kakadiya** for creating this project
