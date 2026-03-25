@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
 */
 import React, { useState, useEffect } from 'react';
-import type { AsciiArtData } from '../services/zaiService';
+import type { AsciiArtData } from '../services/groqService';
 
 interface AsciiArtDisplayProps {
   artData: AsciiArtData | null;
