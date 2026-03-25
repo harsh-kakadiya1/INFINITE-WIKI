@@ -20,7 +20,7 @@ const USE_MOCK_DATA = import.meta.env.DEV;
 
 // Rate limiting: simple delay between requests
 let lastRequestTime = 0;
-const MIN_REQUEST_INTERVAL = 1000; // 1 second between requests
+const MIN_REQUEST_INTERVAL = 2000; // 2 seconds between requests to prevent rate limiting
 
 async function rateLimitDelay() {
   const now = Date.now();
@@ -102,65 +102,88 @@ export async function* streamDefinition(
 
   const prompt = `Provide a concise, single-paragraph encyclopedia-style definition for the term: "${topic}". Be informative and neutral. Do not use markdown, titles, or any special formatting. Respond with only the text of the definition itself.`;
 
-  try {
-    const response = await fetch(`${API_BASE}/chat/completions`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${API_KEY}`,
-      },
-      body: JSON.stringify({
-        model: textModelName,
-        messages: [
-          {
-            role: 'user',
-            content: prompt
-          }
-        ],
-        stream: true
-      })
-    });
-
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
-    }
-
-    const reader = response.body?.getReader();
-    const decoder = new TextDecoder();
-
-    if (!reader) {
-      throw new Error('No response body reader available');
-    }
-
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-
-      const chunk = decoder.decode(value);
-      const lines = chunk.split('\n');
-
-      for (const line of lines) {
-        if (line.startsWith('data: ')) {
-          const data = line.slice(6);
-          if (data === '[DONE]') return;
-          
-          try {
-            const parsed = JSON.parse(data);
-            if (parsed.choices && parsed.choices[0]?.delta?.content) {
-              yield parsed.choices[0].delta.content;
+  const maxRetries = 3;
+  const baseDelay = 2000; // Start with 2 second delay for rate limits
+  
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      const response = await fetch(`${API_BASE}/chat/completions`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${API_KEY}`,
+        },
+        body: JSON.stringify({
+          model: textModelName,
+          messages: [
+            {
+              role: 'user',
+              content: prompt
             }
-          } catch (e) {
-            // Ignore parsing errors for malformed chunks
+          ],
+          stream: true
+        })
+      });
+
+      if (response.status === 429) {
+        // Rate limit hit - wait longer before retry
+        const delay = baseDelay * attempt; // Exponential backoff
+        console.warn(`Rate limit hit in streamDefinition, waiting ${delay}ms before retry ${attempt}/${maxRetries}`);
+        await new Promise(resolve => setTimeout(resolve, delay));
+        continue;
+      }
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const reader = response.body?.getReader();
+      const decoder = new TextDecoder();
+
+      if (!reader) {
+        throw new Error('No response body reader available');
+      }
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        const chunk = decoder.decode(value);
+        const lines = chunk.split('\n');
+
+        for (const line of lines) {
+          if (line.startsWith('data: ')) {
+            const data = line.slice(6);
+            if (data === '[DONE]') return;
+            
+            try {
+              const parsed = JSON.parse(data);
+              if (parsed.choices && parsed.choices[0]?.delta?.content) {
+                yield parsed.choices[0].delta.content;
+              }
+            } catch (e) {
+              // Ignore parsing errors for malformed chunks
+            }
           }
         }
       }
+      return; // Success, exit the retry loop
+
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+      console.warn(`Attempt ${attempt}/${maxRetries} failed in streamDefinition:`, errorMessage);
+
+      if (attempt === maxRetries) {
+        console.error('All retry attempts failed for stream definition');
+        yield `Error: Could not generate content for "${topic}". ${errorMessage}`;
+        throw new Error(errorMessage);
+      }
+      
+      // For non-429 errors, wait a bit before retrying
+      if (!errorMessage.includes('429')) {
+        await new Promise(resolve => setTimeout(resolve, 1000 * attempt));
+      }
     }
-  } catch (error) {
-    console.error('Error streaming from Z.ai:', error);
-    const errorMessage =
-      error instanceof Error ? error.message : 'An unknown error occurred.';
-    yield `Error: Could not generate content for "${topic}". ${errorMessage}`;
-    throw new Error(errorMessage);
   }
 }
 
@@ -182,36 +205,60 @@ export async function getRandomWord(): Promise<string> {
 
   const prompt = `Generate a single, random, interesting English word or a two-word concept. It can be a noun, verb, adjective, or a proper noun. Respond with only the word or concept itself, with no extra text, punctuation, or formatting.`;
 
-  try {
-    const response = await fetch(`${API_BASE}/chat/completions`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${API_KEY}`,
-      },
-      body: JSON.stringify({
-        model: textModelName,
-        messages: [
-          {
-            role: 'user',
-            content: prompt
-          }
-        ]
-      })
-    });
+  const maxRetries = 3;
+  const baseDelay = 2000; // Start with 2 second delay for rate limits
+  
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      const response = await fetch(`${API_BASE}/chat/completions`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${API_KEY}`,
+        },
+        body: JSON.stringify({
+          model: textModelName,
+          messages: [
+            {
+              role: 'user',
+              content: prompt
+            }
+          ]
+        })
+      });
 
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
+      if (response.status === 429) {
+        // Rate limit hit - wait longer before retry
+        const delay = baseDelay * attempt; // Exponential backoff
+        console.warn(`Rate limit hit in getRandomWord, waiting ${delay}ms before retry ${attempt}/${maxRetries}`);
+        await new Promise(resolve => setTimeout(resolve, delay));
+        continue;
+      }
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const data = await response.json();
+      return data.choices[0].message.content.trim();
+
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+      console.warn(`Attempt ${attempt}/${maxRetries} failed in getRandomWord:`, errorMessage);
+
+      if (attempt === maxRetries) {
+        console.error('All retry attempts failed for random word generation');
+        throw new Error(`Could not get random word: ${errorMessage}`);
+      }
+      
+      // For non-429 errors, wait a bit before retrying
+      if (!errorMessage.includes('429')) {
+        await new Promise(resolve => setTimeout(resolve, 1000 * attempt));
+      }
     }
-
-    const data = await response.json();
-    return data.choices[0].message.content.trim();
-  } catch (error) {
-    console.error('Error getting random word from Z.ai:', error);
-    const errorMessage =
-      error instanceof Error ? error.message : 'An unknown error occurred.';
-    throw new Error(`Could not get random word: ${errorMessage}`);
   }
+
+  throw new Error('All retry attempts failed');
 }
 
 /**
