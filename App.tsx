@@ -4,7 +4,7 @@
 */
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { streamDefinition, generateAsciiArt, AsciiArtData } from './services/groqService';
+import { streamDefinition, generateAsciiArt, AsciiArtData } from './services/geminiService';
 import ContentDisplay from './components/ContentDisplay';
 import SearchBar from './components/SearchBar';
 import LoadingSkeleton from './components/LoadingSkeleton';
